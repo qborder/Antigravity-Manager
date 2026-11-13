@@ -1,4 +1,5 @@
 import { checkArgonEligibility, type ModelQuota, type QuotaGroup } from '../types/account';
+import { isModelDisplayCompliant } from './modelCategory';
 
 export type DashboardQuotaView = 'weighted' | '5h' | 'weekly';
 
@@ -220,33 +221,21 @@ export interface GroupQuotaSummary {
     isWeeklyExhausted: boolean;
 }
 
-function isSupportedDisplayModel(name: string): boolean {
-    const m = name.trim().toLowerCase();
-    if (
-        m.includes('-disabled') ||
-        m.endsWith('_disabled') ||
-        m.startsWith('chat_') ||
-        m.startsWith('tab_') ||
-        m.includes('internal') ||
-        m.includes('-exp') ||
-        m.endsWith('-agent') ||
-        m === 'gemini-3-flash' ||
-        m.includes('2.5') ||
-        m.includes('2-5') ||
-        m.includes('3.5-flash-low') ||
-        m.includes('3.5-flash-extra-low') ||
-        m.includes('3.6-flash') ||
-        m.includes('3.7-flash')
-    ) {
-        return false;
-    }
-    return true;
+function isSupportedDisplayModel(name: string, allowLiveCloudModels: boolean = false): boolean {
+    return isModelDisplayCompliant(name, {
+        allowLiveCloudModels,
+        allowGemini31FlashLiteStrict: true,
+    });
 }
 
-function summarizeSupportedModels(models: ModelQuota[], key: 'gemini' | 'claude' | 'argon'): { dynamicLabel?: string; supportedModels: string[] } {
+function summarizeSupportedModels(
+    models: ModelQuota[],
+    key: 'gemini' | 'claude' | 'argon',
+    allowLiveCloudModels: boolean = false,
+): { dynamicLabel?: string; supportedModels: string[] } {
     const active = models
         .map(m => m.name.trim().toLowerCase())
-        .filter(isSupportedDisplayModel);
+        .filter(name => isSupportedDisplayModel(name, allowLiveCloudModels));
 
     if (active.length === 0) {
         if (key === 'argon') {
@@ -319,7 +308,8 @@ function summarizeSupportedModels(models: ModelQuota[], key: 'gemini' | 'claude'
 export function getGroupQuotaSummaries(
     groups: QuotaGroup[] = [],
     fallbackModels: ModelQuota[] = [],
-    tier?: 'ultra' | 'pro' | 'enterprise' | 'free'
+    tier?: 'ultra' | 'pro' | 'enterprise' | 'free',
+    allowLiveCloudModels: boolean = false,
 ): GroupQuotaSummary[] {
     const isFreeTier = tier === 'free';
     const isUltraTier = tier === 'ultra';
@@ -459,7 +449,7 @@ export function getGroupQuotaSummaries(
             if (isArgon) return false;
             return key === 'claude' ? (n.startsWith('claude') || n.startsWith('gpt')) : n.startsWith('gemini');
         });
-        const { dynamicLabel, supportedModels } = summarizeSupportedModels(matchedForSummary, key);
+        const { dynamicLabel, supportedModels } = summarizeSupportedModels(matchedForSummary, key, allowLiveCloudModels);
 
         // [3P MODEL ZERO DEFENSE] 若账号在该模型组下无任何实际未禁用的支持模型（如不支持 Opus 5.5 且 4.6/GPT 不存在），
         // 严格留空 (fiveHour: undefined, weekly: undefined)，杜绝因上游返回通用 3P 桶而展示虚假满额

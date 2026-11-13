@@ -1540,6 +1540,8 @@
             "wildcard_only_gemini_3x": "僅允許內建通配符 gemini-3.x-flash（x 必須大於 8），其他請填寫具體模型 ID",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "啟用雲端活躍模型",
+            "allow_live_cloud_models_tooltip": "解鎖雲端實際可用的 Gemini 2.5（Flash、Flash-Lite、Flash-Thinking、Pro）與 Gemini 3 Flash / 3.1 Flash-Lite 模型用於 /v1/models 顯示與路由，同時繼續封鎖已退役的 1.x/2.0、3.0 Pro、內部及停用模型。",
             "gemini3_group_label": "Gemini 3 (Recommended)",
             "gemini3_option_high": "gemini-3.1-pro-high (High Quality)",
             "gemini3_option_low": "gemini-3.1-pro-low (Balanced)",

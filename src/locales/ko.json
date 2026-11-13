@@ -1474,6 +1474,8 @@
             "subtitle_simple": "와일드카드 또는 정확한 매핑으로 모델 라우팅 사용자 지정",
             "only_raw_quota_models": "할당량 모델만 노출",
             "only_raw_quota_models_tooltip": "활성화하면 /v1/models는 연결된 계정에서 가져온 활성 할당량 모델만 나열하고, 기본 별칭 모델(예: gpt-4o) 및 이미지 비율 변형을 숨깁니다.",
+            "allow_live_cloud_models": "라이브 클라우드 모델 허용",
+            "allow_live_cloud_models_tooltip": "/v1/models 및 라우팅에서 클라우드에서 활성화된 Gemini 2.5(Flash, Flash-Lite, Flash-Thinking, Pro) 및 Gemini 3 Flash / 3.1 Flash-Lite 모델을 잠금 해제하고, 지원 종료된 1.x/2.0, 3.0 Pro, 내부 및 비활성화된 항목은 계속 차단합니다.",
             "background_task_title": "백그라운드 작업 모델",
             "background_task_desc": "제목 생성, 요약 등 Claude CLI 백그라운드 작업에 사용되는 모델 (기본값: gemini-3.1-flash-lite)",
             "use_default": "시스템 기본값 사용",

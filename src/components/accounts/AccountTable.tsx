@@ -370,10 +370,11 @@ function AccountRowContent({
         }
     };
 
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const tier = useMemo(() => getAccountTier(account), [account]);
     const groupSummaries = useMemo(() => {
-        return getGroupQuotaSummaries(account.quota?.quota_groups, account.quota?.models, tier);
-    }, [account.quota?.quota_groups, account.quota?.models, tier]);
+        return getGroupQuotaSummaries(account.quota?.quota_groups, account.quota?.models, tier, allowLiveCloudModels);
+    }, [account.quota?.quota_groups, account.quota?.models, tier, allowLiveCloudModels]);
 
     const modelCapabilities = useMemo(() => {
         const supported = Array.from(new Set(groupSummaries.flatMap(s => s.supportedModels || [])));

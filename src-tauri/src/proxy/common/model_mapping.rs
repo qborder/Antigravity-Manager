@@ -188,10 +188,13 @@ pub fn parse_version_tuple(s: &str) -> Option<(u32, u32)> {
 /// 4. GPT 系列：仅保留官方 gpt-oss-120b-medium 与派生裸模型 gpt-oss-120b，淘汰 gpt-4o 等历史旧模型。
 /// 5. Pro / Image 系列：保留 >= 3.1 Pro 与 3.1-flash-image / 3-pro-image，淘汰 2.5 Pro 及内部 agent / tab 预览模型。
 pub fn is_model_compliant_with_baseline(model: &str) -> bool {
+    is_model_compliant(model, crate::proxy::config::is_live_cloud_models_enabled())
+}
+
+pub fn is_model_compliant(model: &str, allow_live_cloud: bool) -> bool {
     let lower = model.to_lowercase();
     let m = lower.trim();
 
-    // 过滤禁用标记模型、内部任务、测试、tab 补全与旧版 agent 内部代号模型
     if m.contains("-disabled")
         || m.ends_with("_disabled")
         || m.starts_with("chat_")
@@ -199,16 +202,31 @@ pub fn is_model_compliant_with_baseline(model: &str) -> bool {
         || m.contains("internal")
         || m.contains("-exp")
         || m.ends_with("-agent")
-        || m == "gemini-3-flash"
+        || (!allow_live_cloud && m == "gemini-3-flash")
     {
         return false;
     }
 
-    // [2026-10-29] 统一基准：Gemini 主版本 < 3 全量下线（2.5-pro / 2.5-flash / 2.0 / 1.5 …）。
-    // 官方 fetchAvailableModels 的字典里仍可能残留这些条目，但模型列表与门禁一律不得暴露。
+    if allow_live_cloud
+        && matches!(
+            m,
+            "gemini-3-flash"
+                | "gemini-2.5-flash"
+                | "gemini-2.5-flash-lite"
+                | "gemini-2.5-flash-thinking"
+                | "gemini-2.5-pro"
+        )
+    {
+        return true;
+    }
+
     if let Some(rest) = m.strip_prefix("gemini-") {
-        if let Some((major, _minor)) = parse_version_tuple(rest) {
-            if major < 3 {
+        if let Some((major, minor)) = parse_version_tuple(rest) {
+            if allow_live_cloud {
+                if major < 2 || (major == 2 && minor < 5) {
+                    return false;
+                }
+            } else if major < 3 {
                 return false;
             }
         }
@@ -320,9 +338,13 @@ pub fn is_model_compliant_with_baseline(model: &str) -> bool {
 
 /// 获取所有内置支持的标准公开模型列表 (动态从官方模型结构体目录获取并严格过滤基准线)
 pub fn get_supported_models() -> Vec<String> {
-    crate::models::OfficialModelCatalog::recommended_model_ids()
+    get_supported_models_with_mode(crate::proxy::config::is_live_cloud_models_enabled())
+}
+
+pub fn get_supported_models_with_mode(allow_live_cloud: bool) -> Vec<String> {
+    crate::models::OfficialModelCatalog::recommended_model_ids_with_mode(allow_live_cloud)
         .into_iter()
-        .filter(|id| is_model_compliant_with_baseline(id))
+        .filter(|id| is_model_compliant(id, allow_live_cloud))
         .collect()
 }
 
@@ -1651,6 +1673,55 @@ mod tests {
         assert!(!is_model_compliant_with_baseline("gemini-3-flash-agent"));
         assert!(!is_model_compliant_with_baseline("gemini-3-flash"));
         assert!(!is_model_compliant_with_baseline("gemini-3.5-flash"));
+    }
+
+    #[test]
+    fn test_is_model_compliant_with_live_cloud_toggle() {
+        for live in [
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash-thinking",
+            "gemini-2.5-pro",
+            "gemini-3-flash",
+            "gemini-3.1-flash-lite",
+        ] {
+            assert!(
+                is_model_compliant(live, true),
+                "{live} must be allowed when live cloud models are enabled"
+            );
+        }
+
+        for denied in [
+            "chat_20706",
+            "tab_flash_lite_preview",
+            "gemini-3-flash-agent",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-low",
+            "gemini-3.5-flash-extra-low",
+            "gemini-3.6-flash-low",
+            "gemini-3.7-flash-medium",
+            "gemini-3-pro",
+            "gemini-2.0-flash",
+            "gemini-1.5-pro",
+            "gemini-2.5-flash-disabled",
+            "gemini-2.5-flash-preview",
+            "gemini-2.5-pro-preview",
+            "gemini-2.5-pro-internal",
+        ] {
+            assert!(
+                !is_model_compliant(denied, true),
+                "{denied} must stay blocked even when live cloud models are enabled"
+            );
+        }
+
+        let supported_strict = get_supported_models_with_mode(false);
+        let supported_live = get_supported_models_with_mode(true);
+        assert!(!supported_strict.iter().any(|m| m == "gemini-2.5-flash-lite"));
+        assert!(supported_live.iter().any(|m| m == "gemini-2.5-flash-lite"));
+        assert!(supported_live.iter().any(|m| m == "gemini-2.5-flash"));
+        assert!(supported_live.iter().any(|m| m == "gemini-2.5-pro"));
+        assert!(supported_live.iter().any(|m| m == "gemini-3-flash"));
+        assert!(supported_live.iter().any(|m| m == "gemini-3.1-flash-lite"));
     }
 
     #[test]

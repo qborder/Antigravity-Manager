@@ -15,6 +15,7 @@ import {
     ensurePinnedImageSelector,
     DEFAULT_IMAGE_PIN_SELECTOR,
     resolveQuotaModels,
+    isModelDisplayCompliant,
     type ModelCategory,
 } from '../../utils/modelCategory';
 import { getModelQuotaDisplay } from '../../utils/quotaDisplay';
@@ -304,6 +305,41 @@ test('quota display: handles undefined/null buckets and groups safely without th
 
     const display2 = getModelQuotaDisplay(model.name, model, undefined as any);
     assertEqual(display2.percentage, 75);
+});
+
+test('isModelDisplayCompliant respects allowLiveCloudModels toggle without leaking blocked models', () => {
+    const liveCloudModels = [
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash-thinking',
+        'gemini-2.5-pro',
+        'gemini-3-flash',
+        'gemini-3.1-flash-lite',
+    ];
+    for (const id of liveCloudModels) {
+        assertEqual(isModelDisplayCompliant(id, { allowLiveCloudModels: false }), false);
+        assertEqual(isModelDisplayCompliant(id, { allowLiveCloudModels: true }), true);
+    }
+
+    const alwaysBlocked = [
+        'chat_20706',
+        'tab_flash_lite_preview',
+        'gemini-3-flash-agent',
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-low',
+        'gemini-3.6-flash-low',
+        'gemini-3.7-flash-medium',
+        'gemini-3-pro',
+        'gemini-2.0-flash',
+        'gemini-1.5-pro',
+        'gemini-2.5-flash-disabled',
+        'gemini-2.5-flash-preview',
+        'gemini-2.5-pro-internal',
+    ];
+    for (const id of alwaysBlocked) {
+        assertEqual(isModelDisplayCompliant(id, { allowLiveCloudModels: false }), false);
+        assertEqual(isModelDisplayCompliant(id, { allowLiveCloudModels: true }), false);
+    }
 });
 
 if (failed > 0) {

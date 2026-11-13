@@ -699,11 +699,12 @@ pub async fn fetch_quota_with_cache(
 
                 // 遍历官方公开模型目录，将模型可用性与额度解析解耦：
                 // 只要模型在官方支持清单且符合旗舰基准线，坚决予以保留，不再因缺少 quotaInfo 而丢弃模型。
+                let allow_live_cloud = crate::proxy::config::is_live_cloud_models_enabled();
                 for (name, info) in quota_response.models {
                     let name_lower = name.trim().to_lowercase();
 
-                    // 显式过滤官方明确标记禁用的条目（如 disabled: true 或名字包含 -disabled / _disabled）
                     if info.is_disabled()
+                        || info.is_internal == Some(true)
                         || name_lower.contains("-disabled")
                         || name_lower.ends_with("_disabled")
                     {
@@ -712,11 +713,12 @@ pub async fn fetch_quota_with_cache(
 
                     let in_official_sort = official_supported_ids.is_empty()
                         || official_supported_ids.contains(&name_lower);
+                    let keep_by_sort = in_official_sort || allow_live_cloud;
 
-                    // 仅保留当前账号官方实际支持且符合旗舰基准线的模型（彻底剔除 2.5、3.5-flash-low、3-flash-agent、chat_* 等遗留内部条目）
-                    if !in_official_sort
-                        || !crate::proxy::common::model_mapping::is_model_compliant_with_baseline(
+                    if !keep_by_sort
+                        || !crate::proxy::common::model_mapping::is_model_compliant(
                             &name,
+                            allow_live_cloud,
                         )
                     {
                         continue;

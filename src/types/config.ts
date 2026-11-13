@@ -32,6 +32,7 @@ export interface ProxyConfig {
     prompt_rewrite?: PromptRewriteConfig;
     image_thinking_mode?: 'enabled' | 'disabled'; // [NEW] 图像思维模式开关
     only_raw_quota_models?: boolean; // [NEW] 是否只暴露真实配额模型
+    allow_live_cloud_models?: boolean;
     proxy_pool?: ProxyPoolConfig;
     multimodal?: MultimodalConfig;
     stream_timeouts?: StreamTimeoutConfig;

@@ -134,6 +134,7 @@ pub async fn run_headless_server(
     port_override: Option<u16>,
     host_override: Option<String>,
     disable_web_override: bool,
+    allow_live_cloud_models_override: Option<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // If disable_web_override is explicitly true, set ABV_DISABLE_WEB env
     if disable_web_override {
@@ -248,6 +249,19 @@ pub async fn run_headless_server(
     let is_web_disabled = std::env::var("ABV_DISABLE_WEB")
         .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
         .unwrap_or(false);
+
+    if let Some(enabled) = allow_live_cloud_models_override {
+        config.proxy.allow_live_cloud_models = enabled;
+        std::env::set_var(
+            "ABV_ALLOW_LIVE_CLOUD_MODELS",
+            if enabled { "1" } else { "0" },
+        );
+        modified = true;
+    }
+    let resolved_live_cloud = crate::proxy::config::resolve_allow_live_cloud_models(
+        config.proxy.allow_live_cloud_models,
+    );
+    crate::proxy::config::set_allow_live_cloud_models(resolved_live_cloud);
 
     info!("--------------------------------------------------");
     info!("🚀 Headless mode proxy service starting...");
@@ -565,7 +579,7 @@ pub fn run() {
 
     if is_headless {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-        if let Err(e) = rt.block_on(run_headless_server(None, None, false)) {
+        if let Err(e) = rt.block_on(run_headless_server(None, None, false, None)) {
             error!("Headless server exited with error: {}", e);
             std::process::exit(1);
         }
@@ -644,6 +658,11 @@ pub fn run() {
                     crate::modules::hub_version::update_hub_fingerprint(
                         config.proxy.hub_version.as_deref(),
                         config.proxy.hub_cl.as_deref(),
+                    );
+                    crate::proxy::config::set_allow_live_cloud_models(
+                        crate::proxy::config::resolve_allow_live_cloud_models(
+                            config.proxy.allow_live_cloud_models,
+                        ),
                     );
                     let state = handle.state::<commands::proxy::ProxyServiceState>();
                     let cf_state = handle.state::<commands::cloudflared::CloudflaredState>();

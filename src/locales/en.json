@@ -1587,6 +1587,8 @@
             "subtitle_simple": "Customize model routing with wildcards or exact mappings",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "Allow Live Cloud Models",
+            "allow_live_cloud_models_tooltip": "Unlock cloud-active Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) and Gemini 3 Flash / 3.1 Flash-Lite models for /v1/models and routing, while keeping retired 1.x/2.0, 3.0 Pro, internal, and disabled entries blocked.",
             "background_task_title": "Background Task Model",
             "background_task_desc": "Model used for Claude CLI background tasks like title generation, summary, etc. (Default: gemini-3.1-flash-lite)",
             "use_default": "Use System Default",

@@ -229,10 +229,67 @@ pub fn resolve_real_model(canonical: &str, tier: VariantTier) -> Option<RealMode
 /// Covers models the user may configure without variants (flash-lite, claude, etc.).
 /// Also accepts the real IDs themselves (idempotent passthrough).
 pub fn resolve_non_variant_model(model: &str) -> Option<RealModelSpec> {
+    resolve_non_variant_model_with_mode(
+        model,
+        crate::proxy::config::is_live_cloud_models_enabled(),
+    )
+}
+
+pub fn resolve_non_variant_model_with_mode(
+    model: &str,
+    allow_live_cloud: bool,
+) -> Option<RealModelSpec> {
     let key = model.to_lowercase();
-    // gemini-3.1-flash-lite: checkpoint-only model, no thinking.
-    // [RETIRED] 旧版 Gemini 2.x（gemini-2.5-flash / 2.5-flash-lite / 2.5-flash-thinking）已全面下线，
-    // 不再保留任何内部别名映射，避免它们在门禁前被“升级”成合法模型而绕过校验。
+    if allow_live_cloud {
+        match key.as_str() {
+            "gemini-3-flash" => {
+                return Some(apply_official_params(RealModelSpec {
+                    id: "gemini-3-flash",
+                    thinking_budget: 0,
+                    max_output_tokens: 65536,
+                    include_thoughts: true,
+                    preserve_client_budget: false,
+                }));
+            }
+            "gemini-2.5-flash" => {
+                return Some(apply_official_params(RealModelSpec {
+                    id: "gemini-2.5-flash",
+                    thinking_budget: 0,
+                    max_output_tokens: 65535,
+                    include_thoughts: true,
+                    preserve_client_budget: false,
+                }));
+            }
+            "gemini-2.5-flash-lite" => {
+                return Some(apply_official_params(RealModelSpec {
+                    id: "gemini-2.5-flash-lite",
+                    thinking_budget: 0,
+                    max_output_tokens: 65535,
+                    include_thoughts: true,
+                    preserve_client_budget: false,
+                }));
+            }
+            "gemini-2.5-flash-thinking" => {
+                return Some(apply_official_params(RealModelSpec {
+                    id: "gemini-2.5-flash-thinking",
+                    thinking_budget: 0,
+                    max_output_tokens: 65535,
+                    include_thoughts: true,
+                    preserve_client_budget: false,
+                }));
+            }
+            "gemini-2.5-pro" => {
+                return Some(apply_official_params(RealModelSpec {
+                    id: "gemini-2.5-pro",
+                    thinking_budget: 1024,
+                    max_output_tokens: 65535,
+                    include_thoughts: true,
+                    preserve_client_budget: false,
+                }));
+            }
+            _ => {}
+        }
+    }
     if key == "gemini-3.1-flash-lite" {
         return Some(apply_official_params(SPEC_31_FLASH_LITE));
     }
@@ -1222,6 +1279,18 @@ mod tests {
         // 新行为：gemini-2.5-flash 仍保留内部映射
         assert!(resolve("gemini-2.5-flash", None).is_some());
         assert!(resolve("gemini-2.5-flash-thinking", None).is_none());
+
+        for live in [
+            "gemini-3-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash-thinking",
+            "gemini-2.5-pro",
+        ] {
+            let spec = resolve_non_variant_model_with_mode(live, true)
+                .expect("live cloud model should resolve cleanly");
+            assert_eq!(spec.id, live);
+        }
 
         // ── Claude family ──────────────────────────────────────────────
         check("claude-sonnet-4-6", None, "claude-sonnet-4-6", 1024, 64000);

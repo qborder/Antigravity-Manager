@@ -444,6 +444,8 @@ impl DynamicTierRouter {
             || clean.ends_with("-tiered")
             || clean.ends_with("-lite")
             || clean.ends_with("-agent")
+            || (crate::proxy::config::is_live_cloud_models_enabled()
+                && (clean == "gemini-3-flash" || clean.starts_with("gemini-2.5-")))
         {
             return None;
         }
@@ -451,7 +453,9 @@ impl DynamicTierRouter {
         // 规范化 base 名称（例如对于 claude-sonnet-5.5 规范化为 claude-sonnet-5-5）
         let base = if clean.contains("claude") {
             crate::proxy::common::model_mapping::canonicalize_claude_client_model_id(&clean)
-        } else if clean == "gemini-3-flash" {
+        } else if clean == "gemini-3-flash"
+            && !crate::proxy::config::is_live_cloud_models_enabled()
+        {
             "gemini-3.8-flash".to_string()
         } else {
             clean.clone()

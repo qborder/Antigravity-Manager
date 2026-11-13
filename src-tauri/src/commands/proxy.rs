@@ -198,6 +198,10 @@ pub async fn internal_start_proxy_service(
 
     let _monitor = state.monitor.read().await.as_ref().unwrap().clone();
 
+    let resolved_live_cloud =
+        crate::proxy::config::resolve_allow_live_cloud_models(config.allow_live_cloud_models);
+    crate::proxy::config::set_allow_live_cloud_models(resolved_live_cloud);
+
     // 檢查並啟動管理服務器（如果尚未運行）
     ensure_admin_server(
         config.clone(),
@@ -210,12 +214,12 @@ pub async fn internal_start_proxy_service(
     // 2. [FIX] 复用管理服务器的 Token 管理器 (单实例，解决热更新同步问题)
     let token_manager = {
         let admin_lock = state.admin_server.read().await;
-        admin_lock
-            .as_ref()
-            .unwrap()
+        let admin = admin_lock.as_ref().unwrap();
+        admin
             .axum_server
-            .token_manager
-            .clone()
+            .update_allow_live_cloud_models(resolved_live_cloud)
+            .await;
+        admin.axum_server.token_manager.clone()
     };
 
     // 同步配置到运行中的 TokenManager
@@ -318,6 +322,10 @@ pub async fn ensure_admin_server(
         monitor_lock.as_ref().unwrap().clone()
     };
 
+    let resolved_live_cloud =
+        crate::proxy::config::resolve_allow_live_cloud_models(config.allow_live_cloud_models);
+    crate::proxy::config::set_allow_live_cloud_models(resolved_live_cloud);
+
     // 默认空 TokenManager 用于管理界面
     let app_data_dir = crate::modules::account::get_data_dir()?;
     let token_manager = Arc::new(TokenManager::new(app_data_dir));
@@ -341,6 +349,7 @@ pub async fn ensure_admin_server(
         cloudflared_state,
         config.proxy_pool.clone(),
         config.only_raw_quota_models,
+        resolved_live_cloud,
         config.image_scheduler.clone(),
     )
     .await
@@ -1257,6 +1266,7 @@ mod tests {
             Arc::new(crate::commands::cloudflared::CloudflaredState::new()),
             config.proxy_pool.clone(),
             config.only_raw_quota_models,
+            config.allow_live_cloud_models,
             config.image_scheduler.clone(),
         )
         .await

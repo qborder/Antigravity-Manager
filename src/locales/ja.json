@@ -1474,6 +1474,8 @@
             "subtitle_simple": "ワイルドカードまたは完全一致マッピングでモデルルーティングをカスタマイズ",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "クラウド稼働中モデルを許可",
+            "allow_live_cloud_models_tooltip": "/v1/models とルーティングでクラウド稼働中の Gemini 2.5（Flash、Flash-Lite、Flash-Thinking、Pro）および Gemini 3 Flash / 3.1 Flash-Lite を有効にし、廃止された 1.x/2.0、3.0 Pro、内部モデル、無効化された項目は引き続きブロックします。",
             "background_task_title": "バックグラウンドタスク用モデル",
             "background_task_desc": "タイトル生成や要約など、Claude CLIのバックグラウンドタスクに使用されるモデル (デフォルト: gemini-3.1-flash-lite)",
             "use_default": "システムデフォルトを使用",

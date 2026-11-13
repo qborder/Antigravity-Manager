@@ -1517,6 +1517,8 @@
             "original_placeholder": "الأصلي (مثل gpt-4 أو gpt-4*)",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "السماح بالنماذج السحابية النشطة",
+            "allow_live_cloud_models_tooltip": "يفتح نماذج Gemini 2.5 (Flash وFlash-Lite وFlash-Thinking وPro) وGemini 3 Flash / 3.1 Flash-Lite النشطة سحابياً في /v1/models والتوجيه، مع الإبقاء على حظر نماذج 1.x/2.0 المتوقفة و3.0 Pro والنماذج الداخلية والمعطلة.",
             "preset_default": "Default Preset",
             "preset_default_desc": "GPT-4 → Gemini Pro, Claude → Opus",
             "preset_performance": "Performance First",

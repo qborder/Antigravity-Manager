@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react';
-import { MODEL_CONFIG, compareModelsDesc, inferModelGroup } from '../config/modelConfig';
+import { MODEL_CONFIG, compareModelsDesc, inferModelGroup, isModelDisplayCompliant } from '../config/modelConfig';
 import { useAccountStore } from '../stores/useAccountStore';
+import { useConfigStore } from '../stores/useConfigStore';
 import { Bot, Sparkles } from 'lucide-react';
 import { request } from '../utils/request';
 
@@ -44,6 +45,11 @@ const ALIAS_TO_CANONICAL: Record<string, { id: string; name: string; group: stri
     'gemini-3.5-flash-lite': { id: 'gemini-3.5-flash-lite', name: 'gemini-3.5-flash-lite', group: 'Gemini 3' },
     'gemini-3.1-flash-lite': { id: 'gemini-3.1-flash-lite', name: 'gemini-3.1-flash-lite', group: 'Gemini 3' },
     'gemini-flash-lite': { id: 'gemini-3.1-flash-lite', name: 'gemini-3.1-flash-lite', group: 'Gemini 3' },
+    'gemini-3-flash': { id: 'gemini-3-flash', name: 'gemini-3-flash', group: 'Gemini 3' },
+    'gemini-2.5-flash': { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash', group: 'Gemini 2.5' },
+    'gemini-2.5-flash-lite': { id: 'gemini-2.5-flash-lite', name: 'gemini-2.5-flash-lite', group: 'Gemini 2.5' },
+    'gemini-2.5-flash-thinking': { id: 'gemini-2.5-flash-thinking', name: 'gemini-2.5-flash-thinking', group: 'Gemini 2.5' },
+    'gemini-2.5-pro': { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro', group: 'Gemini 2.5' },
     'gemini-3.1-flash-image': { id: 'gemini-3.1-flash-image', name: 'gemini-3.1-flash-image', group: 'Gemini 3' },
     'gemini-3-pro-image': { id: 'gemini-3-pro-image', name: 'gemini-3-pro-image', group: 'Gemini 3' },
 
@@ -65,117 +71,9 @@ const ALIAS_TO_CANONICAL: Record<string, { id: string; name: string; group: stri
     'gpt-oss-120b-medium': { id: 'gpt-oss-120b-medium', name: 'gpt-oss-120b-medium', group: 'Other' },
 };
 
-function isCompliantModel(
-    key: string,
-    deprecatedSet?: Set<string>,
-    activeFlashMinorFloor?: number
-): boolean {
-    const m = key.toLowerCase().trim();
-    if (
-        m.includes('-disabled') ||
-        m.endsWith('_disabled') ||
-        m.startsWith('chat_') ||
-        m.startsWith('tab_') ||
-        m.includes('internal') ||
-        m.includes('-exp') ||
-        m.endsWith('-agent') ||
-        m === 'gemini-3-flash' ||
-        // 未在官方可用集合里的字典残留（已从后端可用集合移除）
-        m === 'gemini-3.1-flash-lite'
-    ) {
-        return false;
-    }
-
-    // 1. 严格检查上游接口返回的官方废弃表 (deprecatedModelIds)
-    // 注意：lite 独立轻量模型若上游仍在可用列表中返回，绝不可误杀
-    if (deprecatedSet && deprecatedSet.has(m) && !m.includes('lite')) {
-        return false;
-    }
-
-    // 2. 特许放行的特定官方核心与专用模型 (Lite 专用系列 / 绘图系列)
-    if (
-        m === 'gemini-3.5-flash-lite' ||
-        m === 'gemini-flash-lite' ||
-        m === 'gemini-3.1-flash-image' ||
-        m === 'gemini-3-pro-image'
-    ) {
-        return true;
-    }
-
-    // 3. 淘汰老旧 2.5、3.5(非lite)、3.6、3.7 及以下系列
-    if (
-        m.includes('2.5') ||
-        m.includes('2-5') ||
-        m.includes('gemini-1.') ||
-        m.includes('gemini-2.') ||
-        m.includes('3.5-flash') ||
-        m.includes('3.6-flash') ||
-        m.includes('3.7-flash')
-    ) {
-        return false;
-    }
-
-    // 4. Claude 系列：以 4.6 为基准线（支持 4.6 与 5.5+，支持 Haiku >= 4.5 与 Fable >= 5.0），淘汰非法 thinking 组合
-    if (m.includes('claude')) {
-        if ((m.startsWith('claude-sonnet-') || m.includes('-5-5')) && m.includes('thinking')) return false;
-
-        const tokens = m.split(/[-_.]/);
-        let detectedMajor: number | null = null;
-        let detectedMinor = 0;
-        let i = 0;
-        while (i < tokens.length) {
-            const tok = tokens[i];
-            if (tok.length === 8 && (tok.startsWith('202') || tok.startsWith('201'))) {
-                i++;
-                continue;
-            }
-            const major = parseInt(tok, 10);
-            if (!isNaN(major) && major < 1000) {
-                detectedMajor = major;
-                if (i + 1 < tokens.length) {
-                    const nextTok = tokens[i + 1];
-                    if (!(nextTok.length === 8 && (nextTok.startsWith('202') || nextTok.startsWith('201')))) {
-                        const minor = parseInt(nextTok, 10);
-                        if (!isNaN(minor) && minor < 1000) {
-                            detectedMinor = minor;
-                            i++;
-                        }
-                    }
-                }
-                break;
-            }
-            i++;
-        }
-
-        if (detectedMajor !== null) {
-            if (m.includes('fable') || m.includes('mythos')) {
-                return detectedMajor >= 5;
-            }
-            return detectedMajor > 4 || (detectedMajor === 4 && detectedMinor >= 6);
-        }
-        return false;
-    }
-
-    // 5. 针对 Gemini 3 Flash 系列思考/推理模型剪枝：
-    if (m.includes('lite') || m.includes('image')) {
-        return true;
-    }
-
-    if (m.startsWith('gemini-3.') && m.includes('flash') && activeFlashMinorFloor !== undefined) {
-        const match = m.match(/gemini-3\.(\d+)/);
-        if (match) {
-            const minor = parseInt(match[1], 10);
-            if (minor < activeFlashMinorFloor) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
 export const useProxyModels = () => {
     const { accounts, fetchAccounts } = useAccountStore();
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const [canonicalFamilies, setCanonicalFamilies] = useState<CanonicalFamilyDto[]>([]);
 
     useEffect(() => {
@@ -229,7 +127,11 @@ export const useProxyModels = () => {
             const modelsList = Array.isArray(account.quota?.models) ? account.quota.models : [];
             for (const m of modelsList) {
                 const rawKey = m.name.toLowerCase().trim();
-                if (!isCompliantModel(rawKey, deprecatedSet, maxGemini3FlashMinor)) {
+                if (!isModelDisplayCompliant(rawKey, {
+                    allowLiveCloudModels,
+                    deprecatedSet,
+                    activeFlashMinorFloor: maxGemini3FlashMinor,
+                })) {
                     continue;
                 }
 
@@ -264,7 +166,11 @@ export const useProxyModels = () => {
             for (const suffix of ['-tiered', '-xhigh', '-high', '-medium', '-low', '-extra-low', '-thinking']) {
                 if (id.endsWith(suffix)) {
                     const base = id.slice(0, -suffix.length);
-                    if (base && isCompliantModel(base, deprecatedSet, maxGemini3FlashMinor) && !uniqueModelsMap.has(base)) {
+                    if (base && isModelDisplayCompliant(base, {
+                        allowLiveCloudModels,
+                        deprecatedSet,
+                        activeFlashMinorFloor: maxGemini3FlashMinor,
+                    }) && !uniqueModelsMap.has(base)) {
                         derivedBares.push(base);
                     }
                 }
@@ -292,7 +198,11 @@ export const useProxyModels = () => {
         if (accounts.length === 0) {
             for (const [id, config] of Object.entries(MODEL_CONFIG)) {
                 const rawKey = id.toLowerCase();
-                if (!isCompliantModel(rawKey, deprecatedSet, maxGemini3FlashMinor)) {
+                if (!isModelDisplayCompliant(rawKey, {
+                    allowLiveCloudModels,
+                    deprecatedSet,
+                    activeFlashMinorFloor: maxGemini3FlashMinor,
+                })) {
                     continue;
                 }
                 const mapped = ALIAS_TO_CANONICAL[rawKey];
@@ -320,7 +230,7 @@ export const useProxyModels = () => {
                 icon: m.icon,
             }))
             .sort(compareModelsDesc);
-    }, [accounts, canonicalFamilies]);
+    }, [accounts, canonicalFamilies, allowLiveCloudModels]);
 
     return { models, canonicalFamilies };
 };

@@ -1337,6 +1337,8 @@ pub struct ProxyConfig {
     /// - true: 开启。当账号 TTFT 显著异常时标记疑似限速，累计超标关入小黑屋并解绑会话。
     #[serde(default)]
     pub qos_auto_jail: bool,
+    #[serde(default)]
+    pub allow_live_cloud_models: bool,
 }
 
 /// Request log retention policy.
@@ -1507,8 +1509,42 @@ impl Default for ProxyConfig {
             image_thinking_mode: None,
             image_scheduler: ImageSchedulerConfig::default(),
             qos_auto_jail: false,
+            allow_live_cloud_models: false,
         }
     }
+}
+
+static ALLOW_LIVE_CLOUD_MODELS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn parse_env_bool(val: &str) -> Option<bool> {
+    match val.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+pub fn resolve_allow_live_cloud_models_from(env_val: Option<&str>, config_value: bool) -> bool {
+    env_val.and_then(parse_env_bool).unwrap_or(config_value)
+}
+
+pub fn resolve_allow_live_cloud_models(config_value: bool) -> bool {
+    let env_val = std::env::var("ABV_ALLOW_LIVE_CLOUD_MODELS").ok();
+    resolve_allow_live_cloud_models_from(env_val.as_deref(), config_value)
+}
+
+pub fn set_allow_live_cloud_models(enabled: bool) -> bool {
+    let prev = ALLOW_LIVE_CLOUD_MODELS.swap(enabled, std::sync::atomic::Ordering::SeqCst);
+    !prev && enabled
+}
+
+pub fn is_live_cloud_models_enabled() -> bool {
+    let env_val = std::env::var("ABV_ALLOW_LIVE_CLOUD_MODELS").ok();
+    resolve_allow_live_cloud_models_from(
+        env_val.as_deref(),
+        ALLOW_LIVE_CLOUD_MODELS.load(std::sync::atomic::Ordering::Relaxed),
+    )
 }
 
 fn default_request_timeout() -> u64 {
@@ -1665,5 +1701,34 @@ mod tests {
         assert_eq!(back, cfg);
         let partial: UploadTimeoutConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(partial, UploadTimeoutConfig::default());
+    }
+
+    #[test]
+    fn allow_live_cloud_models_default_roundtrip_and_env_override() {
+        let default_cfg = ProxyConfig::default();
+        assert!(!default_cfg.allow_live_cloud_models);
+
+        let mut legacy_val = serde_json::to_value(&default_cfg).unwrap();
+        legacy_val
+            .as_object_mut()
+            .unwrap()
+            .remove("allow_live_cloud_models");
+        let legacy: ProxyConfig = serde_json::from_value(legacy_val).unwrap();
+        assert!(!legacy.allow_live_cloud_models);
+
+        let mut enabled_cfg = ProxyConfig::default();
+        enabled_cfg.allow_live_cloud_models = true;
+        let json = serde_json::to_string(&enabled_cfg).unwrap();
+        let back: ProxyConfig = serde_json::from_str(&json).unwrap();
+        assert!(back.allow_live_cloud_models);
+
+        assert!(!resolve_allow_live_cloud_models_from(None, false));
+        assert!(resolve_allow_live_cloud_models_from(None, true));
+        assert!(resolve_allow_live_cloud_models_from(Some("1"), false));
+        assert!(resolve_allow_live_cloud_models_from(Some("TRUE"), false));
+        assert!(resolve_allow_live_cloud_models_from(Some("yes"), false));
+        assert!(!resolve_allow_live_cloud_models_from(Some("0"), true));
+        assert!(!resolve_allow_live_cloud_models_from(Some("false"), true));
+        assert!(resolve_allow_live_cloud_models_from(Some("invalid"), true));
     }
 }

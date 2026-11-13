@@ -83,18 +83,22 @@ pub fn resolve_requested_model(
 /// 指向合规模型（别名本身不参与判定），但映射后的目标自身仍属已下线族时一律返回
 /// 404 `model not exist`；内部“旧名→新模型”的兼容映射同样不得把已下线模型“洗白”后绕过闸门。
 pub fn is_retired_model_id(model: &str) -> bool {
+    is_retired_model_id_with_mode(model, crate::proxy::config::is_live_cloud_models_enabled())
+}
+
+pub fn is_retired_model_id_with_mode(model: &str, allow_live_cloud: bool) -> bool {
     let raw = model.trim().to_lowercase();
     let id = raw.strip_prefix("models/").unwrap_or(raw.as_str()).trim();
 
-    // 生图模型族独立管理（配额桶、请求类型、尺寸后缀都与文本模型不同），
-    // 不得因版本号被“已下线”规则误杀（如 gemini-3-pro-image / gemini-3.1-flash-image 及其 -2k/-4k 变体）。
     if id.contains("image") || id.starts_with("imagen") {
         return false;
     }
 
     if let Some(rest) = id.strip_prefix("gemini-") {
-        // 仅对带版本号的 Gemini ID 判定；gemini-pro / gemini-flash 这类别名交由基准线过滤器处理
-        if let Some((major, _minor)) = model_mapping::parse_version_tuple(rest) {
+        if let Some((major, minor)) = model_mapping::parse_version_tuple(rest) {
+            if allow_live_cloud {
+                return major < 2 || (major == 2 && minor < 5);
+            }
             return major <= 2;
         }
         return false;
@@ -1148,5 +1152,28 @@ mod tests {
             gate_inbound_model_exists(Some("totally-fake-image-model"), &custom_mapping, &tm).await,
             ModelGate::NotFound
         );
+    }
+
+    #[test]
+    fn test_live_cloud_mode_retired_gate_toggle() {
+        for live in [
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash-thinking",
+            "models/gemini-2.5-flash-lite",
+        ] {
+            assert!(is_retired_model_id_with_mode(live, false));
+            assert!(!is_retired_model_id_with_mode(live, true));
+        }
+
+        for always_retired in [
+            "gemini-2.0-flash",
+            "gemini-1.5-pro",
+            "claude-3-5-sonnet-20241022",
+        ] {
+            assert!(is_retired_model_id_with_mode(always_retired, false));
+            assert!(is_retired_model_id_with_mode(always_retired, true));
+        }
     }
 }

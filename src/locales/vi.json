@@ -1520,6 +1520,8 @@
             "original_placeholder": "Gốc (ví dụ: gpt-4 hoặc gpt-4*)",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "Cho phép mô hình cloud đang hoạt động",
+            "allow_live_cloud_models_tooltip": "Mở khóa các mô hình Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) và Gemini 3 Flash / 3.1 Flash-Lite đang hoạt động trên cloud cho /v1/models và định tuyến, đồng thời tiếp tục chặn các mô hình 1.x/2.0 đã ngừng, 3.0 Pro, nội bộ và bị tắt.",
             "preset_default": "Default Preset",
             "preset_default_desc": "GPT-4 → Gemini Pro, Claude → Opus",
             "preset_performance": "Performance First",

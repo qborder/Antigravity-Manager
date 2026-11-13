@@ -1508,6 +1508,8 @@
             "custom_mapping_warning": "Perhatian: Bukan semua akaun menyokong model yang belum dikeluarkan",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "Benarkan Model Awan Aktif",
+            "allow_live_cloud_models_tooltip": "Membuka kunci model Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) dan Gemini 3 Flash / 3.1 Flash-Lite yang aktif di awan untuk /v1/models dan penghalaan, sambil terus menyekat model 1.x/2.0 yang ditamatkan, 3.0 Pro, dalaman dan dinyahdayakan.",
             "preset_default": "Default Preset",
             "preset_default_desc": "GPT-4 → Gemini Pro, Claude → Opus",
             "preset_performance": "Performance First",

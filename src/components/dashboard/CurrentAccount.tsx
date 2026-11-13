@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { getGroupQuotaSummaries, GroupQuotaSummary } from '../../utils/quotaDisplay';
 import { GroupQuotaCard } from '../accounts/GroupQuotaCard';
 import { getLiveLimitForModel } from '../../utils/liveLimit';
+import { useConfigStore } from '../../stores/useConfigStore';
 
 interface CurrentAccountProps {
     account?: Account | null;
@@ -109,12 +110,14 @@ function CurrentAccount({
         return null;
     }, [currentClientAccountId, accounts, activeTab, account]);
 
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const tier = displayedAccount ? getAccountTier(displayedAccount) : 'free';
     const groupSummaries: GroupQuotaSummary[] = displayedAccount
         ? getGroupQuotaSummaries(
               displayedAccount.quota?.quota_groups,
               displayedAccount.quota?.models,
-              tier
+              tier,
+              allowLiveCloudModels
           )
         : [];
 

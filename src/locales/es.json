@@ -1474,6 +1474,8 @@
             "subtitle_simple": "Personalice el enrutamiento de modelos con comodines o mapeos exactos",
             "only_raw_quota_models": "Exponer solo modelos con cuota",
             "only_raw_quota_models_tooltip": "Cuando está habilitado, /v1/models solo muestra los modelos de cuota activos obtenidos de las cuentas conectadas, ocultando los modelos de alias integrados (como gpt-4o) y las variantes de proporción de imagen.",
+            "allow_live_cloud_models": "Permitir modelos activos en la nube",
+            "allow_live_cloud_models_tooltip": "Desbloquea los modelos Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) y Gemini 3 Flash / 3.1 Flash-Lite activos en la nube para /v1/models y el enrutamiento, manteniendo bloqueados los modelos retirados 1.x/2.0, 3.0 Pro, internos y deshabilitados.",
             "background_task_title": "Modelo de Tarea en Segundo Plano",
             "background_task_desc": "Modelo usado para tareas en segundo plano de Claude CLI como generación de título, resumen, etc. (Predeterminado: gemini-3.1-flash-lite)",
             "use_default": "Usar Predeterminado del Sistema",

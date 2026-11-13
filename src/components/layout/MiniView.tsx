@@ -206,6 +206,7 @@ export default function MiniView() {
         }
     }, [displayedAccount?.id, displayedAccount?.quota]);
 
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const tier = displayedAccount ? getAccountTier(displayedAccount) : 'free';
 
     const groupSummaries: GroupQuotaSummary[] = useMemo(() => {
@@ -213,9 +214,10 @@ export default function MiniView() {
         return getGroupQuotaSummaries(
             displayedAccount.quota?.quota_groups,
             displayedAccount.quota?.models,
-            tier
+            tier,
+            allowLiveCloudModels
         );
-    }, [displayedAccount, tier]);
+    }, [displayedAccount, tier, allowLiveCloudModels]);
 
     const isGroupProtected = (key: 'gemini' | 'claude' | 'argon') => {
         if (!displayedAccount?.protected_models || displayedAccount.protected_models.length === 0)
@@ -425,7 +427,7 @@ export default function MiniView() {
 
             for (const acc of activePool) {
                 const tier = getAccountTier(acc);
-                const summaries = getGroupQuotaSummaries(acc.quota?.quota_groups, acc.quota?.models, tier);
+                const summaries = getGroupQuotaSummaries(acc.quota?.quota_groups, acc.quota?.models, tier, allowLiveCloudModels);
                 const group = summaries.find((s) => s.key === target);
                 if (!group) continue;
 

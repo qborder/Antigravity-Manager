@@ -424,10 +424,23 @@ impl OfficialModelCatalog {
         recommended
     }
 
-    /// 计算暴露给端点的官方推荐模型列表（纯函数版本，便于并发安全的单元测试）
+    pub(crate) fn is_live_cloud_candidate(id: &str, info: &OfficialModelInfo) -> bool {
+        info.is_internal != Some(true)
+            && !info.is_disabled()
+            && crate::proxy::common::model_mapping::is_model_compliant(id, true)
+    }
+
     pub(crate) fn resolve_recommended_model_ids(
         live_accounts: Option<&HashMap<String, std::collections::HashSet<String>>>,
         catalog: &HashMap<String, OfficialModelInfo>,
+    ) -> Vec<String> {
+        Self::resolve_recommended_model_ids_with_mode(live_accounts, catalog, false)
+    }
+
+    pub(crate) fn resolve_recommended_model_ids_with_mode(
+        live_accounts: Option<&HashMap<String, std::collections::HashSet<String>>>,
+        catalog: &HashMap<String, OfficialModelInfo>,
+        allow_live_cloud: bool,
     ) -> Vec<String> {
         let is_active_info =
             |info: &OfficialModelInfo| info.is_internal != Some(true) && !info.is_disabled();
@@ -442,17 +455,27 @@ impl OfficialModelCatalog {
                     }
                 }
             }
-            return result.into_iter().collect();
+        } else {
+            for (id, info) in catalog {
+                if !is_active_info(info) {
+                    continue;
+                }
+                if info.recommended == Some(true)
+                    || id.eq_ignore_ascii_case("gemini-3.1-flash-image")
+                {
+                    result.insert(id.clone());
+                }
+            }
         }
 
-        for (id, info) in catalog {
-            if !is_active_info(info) {
-                continue;
-            }
-            if info.recommended == Some(true) || id.eq_ignore_ascii_case("gemini-3.1-flash-image") {
-                result.insert(id.clone());
+        if allow_live_cloud {
+            for (id, info) in catalog {
+                if Self::is_live_cloud_candidate(id, info) {
+                    result.insert(id.clone());
+                }
             }
         }
+
         result.into_iter().collect()
     }
 
@@ -535,15 +558,20 @@ impl OfficialModelCatalog {
         }
     }
 
-    /// 获取官方推荐的可用模型 ID 列表（在线同步或重启恢复磁盘缓存后优先使用官方推荐联合集合；仅纯首次冷启动回退随包内嵌快照）
     pub fn recommended_model_ids() -> Vec<String> {
+        Self::recommended_model_ids_with_mode(
+            crate::proxy::config::is_live_cloud_models_enabled(),
+        )
+    }
+
+    pub fn recommended_model_ids_with_mode(allow_live_cloud: bool) -> Vec<String> {
         let live_guard = Self::live_recommended_store().read().ok();
         let live_ref = live_guard
             .as_ref()
             .and_then(|g| g.as_ref())
             .map(|s| &s.accounts);
         if let Ok(catalog) = DYNAMIC_CATALOG.read() {
-            Self::resolve_recommended_model_ids(live_ref, &catalog)
+            Self::resolve_recommended_model_ids_with_mode(live_ref, &catalog, allow_live_cloud)
         } else {
             Vec::new()
         }
@@ -900,5 +928,53 @@ mod tests {
         assert!(!cache_path.exists());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn live_cloud_mode_unlocks_active_non_internal_models() {
+        let mut catalog = HashMap::new();
+
+        let mut flash25 = OfficialModelCatalog::default_model();
+        flash25.recommended = Some(false);
+        catalog.insert("gemini-2.5-flash".to_string(), flash25.clone());
+        catalog.insert("gemini-2.5-flash-lite".to_string(), flash25.clone());
+        catalog.insert("gemini-3-flash".to_string(), flash25.clone());
+
+        let mut flash31_lite = OfficialModelCatalog::default_model();
+        flash31_lite.recommended = None;
+        catalog.insert("gemini-3.1-flash-lite".to_string(), flash31_lite);
+
+        let mut flash25_disabled = OfficialModelCatalog::default_model();
+        flash25_disabled.disabled = Some(true);
+        catalog.insert("gemini-2.5-flash-disabled".to_string(), flash25_disabled);
+
+        let mut internal_chat = OfficialModelCatalog::default_model();
+        internal_chat.is_internal = Some(true);
+        catalog.insert("chat_20706".to_string(), internal_chat);
+
+        let mut sunset_36 = OfficialModelCatalog::default_model();
+        sunset_36.recommended = Some(false);
+        catalog.insert("gemini-3.6-flash-low".to_string(), sunset_36);
+
+        let strict = OfficialModelCatalog::resolve_recommended_model_ids_with_mode(
+            None,
+            &catalog,
+            false,
+        );
+        assert!(!strict.contains(&"gemini-2.5-flash".to_string()));
+        assert!(!strict.contains(&"gemini-3-flash".to_string()));
+
+        let unlocked = OfficialModelCatalog::resolve_recommended_model_ids_with_mode(
+            None,
+            &catalog,
+            true,
+        );
+        assert!(unlocked.contains(&"gemini-2.5-flash".to_string()));
+        assert!(unlocked.contains(&"gemini-2.5-flash-lite".to_string()));
+        assert!(unlocked.contains(&"gemini-3-flash".to_string()));
+        assert!(unlocked.contains(&"gemini-3.1-flash-lite".to_string()));
+        assert!(!unlocked.contains(&"gemini-2.5-flash-disabled".to_string()));
+        assert!(!unlocked.contains(&"chat_20706".to_string()));
+        assert!(!unlocked.contains(&"gemini-3.6-flash-low".to_string()));
     }
 }

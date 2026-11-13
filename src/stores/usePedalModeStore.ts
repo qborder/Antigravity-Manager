@@ -4,6 +4,7 @@ import { PedalCandidate, PedalModeState, PedalTargetModel } from '../types/pedal
 import { getGroupQuotaSummaries } from '../utils/quotaDisplay';
 import { showToast } from '../components/common/ToastContainer';
 import { useAccountStore } from './useAccountStore';
+import { useConfigStore } from './useConfigStore';
 import { request } from '../utils/request';
 
 const STORAGE_KEY = 'antigravity_pedal_mode_state';
@@ -73,7 +74,8 @@ function extractCandidate(account: Account, model: PedalTargetModel): PedalCandi
     }
 
     const tier = getAccountTier(account);
-    const summaries = getGroupQuotaSummaries(account.quota?.quota_groups, account.quota?.models, tier);
+    const allowLiveCloudModels = useConfigStore.getState().config?.proxy?.allow_live_cloud_models ?? false;
+    const summaries = getGroupQuotaSummaries(account.quota?.quota_groups, account.quota?.models, tier, allowLiveCloudModels);
     const summary = summaries.find(s => s.key === model);
     if (!summary || !summary.weekly || summary.weekly.percentage === undefined || !summary.weekly.resetTime) {
         return null;
@@ -292,9 +294,10 @@ export const usePedalModeStore = create<PedalModeStore>((set, get) => {
                 let allDrained = true;
                 let allReset = true;
 
+                const allowLiveCloudModels = useConfigStore.getState().config?.proxy?.allow_live_cloud_models ?? false;
                 for (const acc of targetAccounts) {
                     const tier = getAccountTier(acc);
-                    const summaries = getGroupQuotaSummaries(acc.quota?.quota_groups, acc.quota?.models, tier);
+                    const summaries = getGroupQuotaSummaries(acc.quota?.quota_groups, acc.quota?.models, tier, allowLiveCloudModels);
                     const s = summaries.find(sm => sm.key === state.targetModel);
 
                     // 配额数据未就绪或临时加载失败时，进行保守保护，防止误判为 0% 提前退出

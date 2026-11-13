@@ -5,6 +5,7 @@ import BackgroundTaskRunner from '../common/BackgroundTaskRunner';
 import ToastContainer from '../common/ToastContainer';
 import { useViewStore } from '../../stores/useViewStore';
 import { useAccountStore } from '../../stores/useAccountStore';
+import { useConfigStore } from '../../stores/useConfigStore';
 import { usePedalModeStore } from '../../stores/usePedalModeStore';
 import { PedalNoticeModal } from '../pedal/PedalNoticeModal';
 import { PedalBanner } from '../pedal/PedalBanner';
@@ -18,6 +19,7 @@ import { getGroupQuotaSummaries } from '../../utils/quotaDisplay';
 function Layout() {
     const { isMiniView } = useViewStore();
     const { accounts, updateAccountPriority, toggleProxyStatus } = useAccountStore();
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const { active, checkCandidates, checkAndAutoRecover } = usePedalModeStore();
     const prevFingerprintRef = useRef<string>('');
 
@@ -28,11 +30,11 @@ function Layout() {
         // 计算只包含账号ID、代理禁用状态以及 Gemini/Claude 配额与重置时间的特征指纹，避免由于调度优先级变更引发死循环
         const fingerprint = accounts.map(a => {
             const tier = getAccountTier(a);
-            const summaries = getGroupQuotaSummaries(a.quota?.quota_groups, a.quota?.models, tier);
+            const summaries = getGroupQuotaSummaries(a.quota?.quota_groups, a.quota?.models, tier, allowLiveCloudModels);
             const gemini = summaries.find(s => s.key === 'gemini');
             const claude = summaries.find(s => s.key === 'claude');
             return `${a.id}:${a.proxy_disabled ? 1 : 0}:${gemini?.weekly?.percentage ?? ''}:${gemini?.weekly?.resetTime ?? ''}:${claude?.weekly?.percentage ?? ''}:${claude?.weekly?.resetTime ?? ''}`;
-        }).join('|') + `|active:${active}`;
+        }).join('|') + `|active:${active}|liveCloud:${allowLiveCloudModels ? 1 : 0}`;
 
         if (fingerprint === prevFingerprintRef.current) {
             return;
@@ -44,7 +46,7 @@ function Layout() {
         } else {
             checkCandidates(accounts);
         }
-    }, [accounts, active, checkCandidates, checkAndAutoRecover, updateAccountPriority, toggleProxyStatus]);
+    }, [accounts, active, allowLiveCloudModels, checkCandidates, checkAndAutoRecover, updateAccountPriority, toggleProxyStatus]);
 
     // 蹬额度模式：每 60 秒定期心跳校验临期与重置倒计时
     useEffect(() => {

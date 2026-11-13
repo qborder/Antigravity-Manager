@@ -1487,6 +1487,8 @@
             "subtitle_simple": "Personalizar roteamento de modelos com curingas ou mapeamentos exatos",
             "only_raw_quota_models": "Apenas Modelos com Cota Bruta",
             "only_raw_quota_models_tooltip": "Filtra e exibe somente modelos que reportam cotas brutas diretas da API",
+            "allow_live_cloud_models": "Permitir modelos ativos na nuvem",
+            "allow_live_cloud_models_tooltip": "Libera modelos ativos na nuvem Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) e Gemini 3 Flash / 3.1 Flash-Lite no /v1/models e no roteamento, mantendo bloqueados os modelos descontinuados 1.x/2.0, 3.0 Pro, internos e desativados.",
             "background_task_title": "Modelo de Tarefa em Segundo Plano",
             "background_task_desc": "Modelo usado para tarefas em segundo plano do Claude CLI, como geração de título, resumo, etc. (Padrão: gemini-3.1-flash-lite)",
             "use_default": "Usar Padrão do Sistema",

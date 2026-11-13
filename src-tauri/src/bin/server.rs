@@ -7,6 +7,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut port_override: Option<u16> = None;
     let mut host_override: Option<String> = None;
     let mut disable_web = false;
+    let mut allow_live_cloud_models_override: Option<bool> = None;
 
     // Check for help flags specifically for server first
     if args.iter().any(|a| a == "--help") {
@@ -14,10 +15,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Antigravity Headless Server\n\n\
             Usage:\n  antigravity-server [OPTIONS] [COMMAND]\n\n\
             Options:\n  \
-            -p, --port <PORT>        Set listening port (default: 8045)\n  \
-            -h, --host <HOST>        Set listening host (e.g. 127.0.0.1 or 0.0.0.0)\n  \
-            --no-web, --pure-proxy   Disable Web UI static console (pure proxy mode)\n  \
-            --help                   Show help information\n\n\
+            -p, --port <PORT>            Set listening port (default: 8045)\n  \
+            -h, --host <HOST>            Set listening host (e.g. 127.0.0.1 or 0.0.0.0)\n  \
+            --no-web, --pure-proxy       Disable Web UI static console (pure proxy mode)\n  \
+            --allow-live-cloud-models    Expose non-disabled live cloud models (e.g. gemini-2.5-*, gemini-3-flash)\n  \
+            --no-allow-live-cloud-models Disable live cloud model unlocking\n  \
+            --help                       Show help information\n\n\
             Commands:\n  \
             switch, list, current, import, export, sync  (Run 'antigravity-tools help' for CLI command details)\n"
         );
@@ -55,9 +58,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--no-web" | "--pure-proxy" => {
                 disable_web = true;
             }
+            "--allow-live-cloud-models" => {
+                allow_live_cloud_models_override = Some(true);
+            }
+            "--no-allow-live-cloud-models" => {
+                allow_live_cloud_models_override = Some(false);
+            }
             _ => {}
         }
     }
 
-    antigravity_tools_lib::run_headless_server(port_override, host_override, disable_web).await
+    antigravity_tools_lib::run_headless_server(
+        port_override,
+        host_override,
+        disable_web,
+        allow_live_cloud_models_override,
+    )
+    .await
 }

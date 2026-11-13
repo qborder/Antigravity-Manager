@@ -107,6 +107,7 @@ pub struct AppState {
     pub proxy_pool_state: Arc<tokio::sync::RwLock<crate::proxy::config::ProxyPoolConfig>>, // [FIX Web Mode]
     pub proxy_pool_manager: Arc<crate::proxy::proxy_pool::ProxyPoolManager>, // [FIX Web Mode]
     pub only_raw_quota_models: Arc<tokio::sync::RwLock<bool>>, // [NEW] 是否只暴露真实配额模型
+    pub allow_live_cloud_models: Arc<tokio::sync::RwLock<bool>>,
     pub image_scheduler: Arc<ImageScheduler>,
 }
 
@@ -449,6 +450,7 @@ pub struct AxumServer {
     pub proxy_pool_state: Arc<tokio::sync::RwLock<crate::proxy::config::ProxyPoolConfig>>, // [NEW] 代理池配置状态
     pub proxy_pool_manager: Arc<crate::proxy::proxy_pool::ProxyPoolManager>, // [NEW] 暴露代理池管理器供命令调用
     pub only_raw_quota_models: Arc<tokio::sync::RwLock<bool>>,
+    pub allow_live_cloud_models: Arc<tokio::sync::RwLock<bool>>,
 }
 
 impl AxumServer {
@@ -456,6 +458,12 @@ impl AxumServer {
         let mut r = self.only_raw_quota_models.write().await;
         *r = only_raw;
         tracing::debug!("only_raw_quota_models 已更新: {}", only_raw);
+    }
+
+    pub async fn update_allow_live_cloud_models(&self, enabled: bool) {
+        let mut r = self.allow_live_cloud_models.write().await;
+        *r = enabled;
+        tracing::debug!("allow_live_cloud_models updated: {}", enabled);
     }
 
     pub async fn update_mapping(&self, config: &crate::proxy::config::ProxyConfig) {
@@ -549,6 +557,7 @@ impl AxumServer {
         cloudflared_state: Arc<crate::commands::cloudflared::CloudflaredState>,
         proxy_pool_config: crate::proxy::config::ProxyPoolConfig, // [NEW]
         only_raw_quota_models: bool,
+        allow_live_cloud_models: bool,
         image_scheduler_config: crate::proxy::config::ImageSchedulerConfig,
     ) -> Result<(Self, tokio::task::JoinHandle<()>), String> {
         let custom_mapping_state = Arc::new(tokio::sync::RwLock::new(custom_mapping));
@@ -569,6 +578,7 @@ impl AxumServer {
         let is_running_state = Arc::new(RwLock::new(false));
 
         let only_raw_quota_models_state = Arc::new(tokio::sync::RwLock::new(only_raw_quota_models));
+        let allow_live_cloud_models_state = Arc::new(tokio::sync::RwLock::new(allow_live_cloud_models));
         let image_account_ids = token_manager.enabled_account_ids();
         let image_account_count = image_account_ids.len();
         let image_scheduler = build_image_scheduler(
@@ -617,6 +627,7 @@ impl AxumServer {
             proxy_pool_state: proxy_pool_state.clone(),
             proxy_pool_manager: proxy_pool_manager.clone(),
             only_raw_quota_models: only_raw_quota_models_state.clone(),
+            allow_live_cloud_models: allow_live_cloud_models_state.clone(),
             image_scheduler,
         };
 
@@ -1176,6 +1187,7 @@ impl AxumServer {
             proxy_pool_state,
             proxy_pool_manager,
             only_raw_quota_models: only_raw_quota_models_state,
+            allow_live_cloud_models: allow_live_cloud_models_state,
         };
 
         let server_cancel_token = cancel_token.clone();
@@ -2066,6 +2078,16 @@ async fn admin_save_config(
         *only_raw = new_config.proxy.only_raw_quota_models;
     }
 
+    let resolved_live_cloud = crate::proxy::config::resolve_allow_live_cloud_models(
+        new_config.proxy.allow_live_cloud_models,
+    );
+    {
+        let mut allow_live = state.allow_live_cloud_models.write().await;
+        *allow_live = resolved_live_cloud;
+    }
+    let live_cloud_newly_enabled =
+        crate::proxy::config::set_allow_live_cloud_models(resolved_live_cloud);
+
     // 更新上游代理
     {
         let mut proxy = state.upstream_proxy.write().await;
@@ -2144,6 +2166,24 @@ async fn admin_save_config(
         Some(new_config.proxy.experimental.thinking_max_memory_turns),
         Some(new_config.proxy.experimental.enable_global_compaction_strip),
     );
+
+    if live_cloud_newly_enabled {
+        let tm = state.token_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::modules::account::refresh_all_quotas_logic().await {
+                tracing::warn!(
+                    "[admin_save_config] failed to refresh quotas after enabling live cloud models: {}",
+                    e
+                );
+            }
+            if let Err(e) = tm.reload_all_accounts().await {
+                tracing::warn!(
+                    "[admin_save_config] failed to reload accounts after enabling live cloud models: {}",
+                    e
+                );
+            }
+        });
+    }
 
     Ok(StatusCode::OK)
 }

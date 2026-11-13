@@ -564,6 +564,13 @@ pub async fn save_config(
         Some(config.proxy.experimental.enable_global_compaction_strip),
     );
 
+    let resolved_live_cloud = crate::proxy::config::resolve_allow_live_cloud_models(
+        config.proxy.allow_live_cloud_models,
+    );
+    let live_cloud_newly_enabled =
+        crate::proxy::config::set_allow_live_cloud_models(resolved_live_cloud);
+    let mut refresh_tm: Option<std::sync::Arc<crate::proxy::token_manager::TokenManager>> = None;
+
     // 同步健康检查日志捕获开关
     let monitor_lock = proxy_state.monitor.read().await;
     if let Some(monitor) = monitor_lock.as_ref() {
@@ -580,6 +587,11 @@ pub async fn save_config(
             .axum_server
             .update_only_raw_quota_models(config.proxy.only_raw_quota_models)
             .await;
+        instance
+            .axum_server
+            .update_allow_live_cloud_models(resolved_live_cloud)
+            .await;
+        refresh_tm = Some(instance.token_manager.clone());
         // 更新上游代理
         instance
             .axum_server
@@ -646,6 +658,13 @@ pub async fn save_config(
             .await;
         admin
             .axum_server
+            .update_allow_live_cloud_models(resolved_live_cloud)
+            .await;
+        if refresh_tm.is_none() {
+            refresh_tm = Some(admin.axum_server.token_manager.clone());
+        }
+        admin
+            .axum_server
             .update_proxy(config.proxy.upstream_proxy.clone())
             .await;
         admin.axum_server.update_security(&config.proxy).await;
@@ -666,6 +685,25 @@ pub async fn save_config(
             .update_circuit_breaker_config(config.circuit_breaker.clone())
             .await;
         tracing::debug!("已同步热更新管理服务器 (Admin Server) 配置");
+    }
+
+    if live_cloud_newly_enabled {
+        tokio::spawn(async move {
+            if let Err(e) = crate::modules::account::refresh_all_quotas_logic().await {
+                tracing::warn!(
+                    "[update_proxy_config] failed to refresh quotas after enabling live cloud models: {}",
+                    e
+                );
+            }
+            if let Some(tm) = refresh_tm {
+                if let Err(e) = tm.reload_all_accounts().await {
+                    tracing::warn!(
+                        "[update_proxy_config] failed to reload accounts after enabling live cloud models: {}",
+                        e
+                    );
+                }
+            }
+        });
     }
 
     Ok(())

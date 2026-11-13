@@ -4,9 +4,10 @@ import { createPortal } from 'react-dom';
 import { Account, getAccountTier, getTierLabel, ModelPriorities } from '../../types/account';
 import { formatDate, formatTimeRemaining } from '../../utils/format';
 import { useTranslation } from 'react-i18next';
-import { MODEL_CONFIG, sortModels } from '../../config/modelConfig';
+import { MODEL_CONFIG, sortModels, isModelDisplayCompliant } from '../../config/modelConfig';
 import { showToast } from '../common/ToastContainer';
 import { copyToClipboard } from '../../utils/clipboard';
+import { useConfigStore } from '../../stores/useConfigStore';
 
 interface AccountDetailsDialogProps {
     account: Account | null;
@@ -24,6 +25,7 @@ export default function AccountDetailsDialog({
     onAutoFetchProjectId,
 }: AccountDetailsDialogProps) {
     const { t } = useTranslation();
+    const allowLiveCloudModels = useConfigStore(s => s.config?.proxy?.allow_live_cloud_models ?? false);
     const [activeTab, setActiveTab] = useState<'basic' | 'detailed'>('basic');
     const [priorityInput, setPriorityInput] = useState('50');
     const [geminiPriorityInput, setGeminiPriorityInput] = useState('');
@@ -39,27 +41,11 @@ export default function AccountDetailsDialog({
 
     const displayModels = useMemo(() => {
         const models = account?.quota?.models || [];
-        return models.filter(m => {
-            const name = (m.name || '').trim().toLowerCase();
-            if (
-                name.startsWith('chat_') ||
-                name.startsWith('tab_') ||
-                name.includes('internal') ||
-                name.includes('-exp') ||
-                name.endsWith('-agent') ||
-                name === 'gemini-3-flash' ||
-                name.includes('2.5') ||
-                name.includes('2-5') ||
-                name.includes('3.5-flash-low') ||
-                name.includes('3.5-flash-extra-low') ||
-                name.includes('3.6-flash') ||
-                name.includes('3.7-flash')
-            ) {
-                return false;
-            }
-            return true;
-        });
-    }, [account?.quota?.models]);
+        return models.filter(m => isModelDisplayCompliant(m.name || '', {
+            allowLiveCloudModels,
+            allowGemini31FlashLiteStrict: true,
+        }));
+    }, [account?.quota?.models, allowLiveCloudModels]);
 
     useEffect(() => {
         setPriorityInput(String(account?.priority ?? 50));

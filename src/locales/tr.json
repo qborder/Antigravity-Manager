@@ -1522,6 +1522,8 @@
             "original_placeholder": "Orijinal (örn: gpt-4 veya gpt-4*)",
             "only_raw_quota_models": "Only Expose Quota Models",
             "only_raw_quota_models_tooltip": "When enabled, /v1/models only lists active quota models fetched from connected accounts, hiding built-in alias models (like gpt-4o) and image ratio variants.",
+            "allow_live_cloud_models": "Canlı Bulut Modellerine İzin Ver",
+            "allow_live_cloud_models_tooltip": "/v1/models ve yönlendirme için bulutta etkin Gemini 2.5 (Flash, Flash-Lite, Flash-Thinking, Pro) ve Gemini 3 Flash / 3.1 Flash-Lite modellerini açar; kullanımdan kaldırılmış 1.x/2.0, 3.0 Pro, dahili ve devre dışı girdileri engellemeye devam eder.",
             "preset_default": "Default Preset",
             "preset_default_desc": "GPT-4 → Gemini Pro, Claude → Opus",
             "preset_performance": "Performance First",

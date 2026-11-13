@@ -41,6 +41,8 @@ import { useProxyModels } from '../hooks/useProxyModels';
 import GroupedSelect, { SelectOption } from '../components/common/GroupedSelect';
 import { CliSyncCard } from '../components/proxy/CliSyncCard';
 import { listAccounts } from '../services/accountService';
+import { useAccountStore } from '../stores/useAccountStore';
+import { useConfigStore } from '../stores/useConfigStore';
 import { motion } from 'framer-motion';
 import CircuitBreaker from '../components/settings/CircuitBreaker';
 import GlobalSystemPrompt from '../components/settings/GlobalSystemPrompt';
@@ -576,6 +578,7 @@ export default function ApiProxy() {
             const config = await invoke<AppConfig>('load_config');
             if (config && typeof config === 'object' && config.proxy) {
                 setAppConfig(config);
+                useConfigStore.setState({ config });
 
                 // 恢复 Cloudflared 持久化状态
                 if (config.cloudflared) {
@@ -613,6 +616,7 @@ export default function ApiProxy() {
     const saveConfig = async (newConfig: AppConfig) => {
         // 1. 立即更新 UI 状态，确保流畅
         setAppConfig(newConfig);
+        useConfigStore.setState({ config: newConfig });
         try {
             await invoke('save_config', { config: newConfig });
         } catch (error) {
@@ -1020,6 +1024,17 @@ export default function ApiProxy() {
         }
     };
 
+    const liveCloudRefreshTimersRef = useRef<number[]>([]);
+
+    useEffect(() => {
+        return () => {
+            for (const timerId of liveCloudRefreshTimersRef.current) {
+                window.clearTimeout(timerId);
+            }
+            liveCloudRefreshTimersRef.current = [];
+        };
+    }, []);
+
     const updateProxyConfig = (updates: Partial<ProxyConfig>) => {
         if (!appConfig) return;
         const newConfig = {
@@ -1030,6 +1045,24 @@ export default function ApiProxy() {
             }
         };
         saveConfig(newConfig);
+    };
+
+    const handleToggleLiveCloudModels = (enabled: boolean) => {
+        updateProxyConfig({ allow_live_cloud_models: enabled });
+        for (const timerId of liveCloudRefreshTimersRef.current) {
+            window.clearTimeout(timerId);
+        }
+        liveCloudRefreshTimersRef.current = [];
+        if (enabled) {
+            liveCloudRefreshTimersRef.current = [
+                window.setTimeout(() => {
+                    void useAccountStore.getState().fetchAccounts();
+                }, 2000),
+                window.setTimeout(() => {
+                    void useAccountStore.getState().fetchAccounts();
+                }, 5500),
+            ];
+        }
     };
 
     const updateSchedulingConfig = (updates: Partial<StickySessionConfig>) => {
@@ -1352,6 +1385,21 @@ print(response.choices[0].message.content)`;
                                     className="toggle toggle-sm bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 checked:bg-blue-600 checked:border-blue-600 cursor-pointer"
                                     checked={appConfig.proxy.only_raw_quota_models ?? false}
                                     onChange={(e) => updateProxyConfig({ only_raw_quota_models: e.target.checked })}
+                                />
+                            </label>
+
+                            <label
+                                className="flex items-center gap-2 px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-base-200 cursor-pointer hover:bg-gray-100 dark:hover:bg-base-300 transition-colors h-9 select-none"
+                                title={t('proxy.router.allow_live_cloud_models_tooltip')}
+                            >
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                    {t('proxy.router.allow_live_cloud_models')}
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    className="toggle toggle-sm bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 checked:bg-emerald-600 checked:border-emerald-600 cursor-pointer"
+                                    checked={appConfig.proxy.allow_live_cloud_models ?? false}
+                                    onChange={(e) => handleToggleLiveCloudModels(e.target.checked)}
                                 />
                             </label>
 

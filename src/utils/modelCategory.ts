@@ -46,6 +46,11 @@ const DEFAULT_MODEL_LABELS: Record<string, string> = {
     'gemini-3.8-flash-tiered': 'gemini-3.8-flash-tiered',
     'gemini-3.5-flash-lite': 'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite': 'gemini-3.1-flash-lite',
+    'gemini-3-flash': 'gemini-3-flash',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
+    'gemini-2.5-flash-thinking': 'gemini-2.5-flash-thinking',
+    'gemini-2.5-pro': 'gemini-2.5-pro',
     'gemini-3.1-flash-image': 'gemini-3.1-flash-image',
     'gemini-3-pro-image': 'gemini-3-pro-image',
     'claude-opus-5-5-high': 'claude-opus-5-5-high',
@@ -80,8 +85,8 @@ export function findQuotaModel<T extends { name: string }>(
 ): T | undefined {
     if (!models || models.length === 0) return undefined;
     const preferred: Partial<Record<ModelCategory, string[]>> = {
-        'gemini-pro': ['gemini-3.1-pro-high', 'gemini-3.1-pro', 'gemini-3.1-pro-low'],
-        'gemini-flash': ['gemini-3.8-flash-high', 'gemini-3.8-flash', 'gemini-3.8-flash-medium', 'gemini-3.8-flash-low', 'gemini-3.8-flash-tiered', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+        'gemini-pro': ['gemini-3.1-pro-high', 'gemini-3.1-pro', 'gemini-3.1-pro-low', 'gemini-2.5-pro'],
+        'gemini-flash': ['gemini-3.8-flash-high', 'gemini-3.8-flash', 'gemini-3.8-flash-medium', 'gemini-3.8-flash-low', 'gemini-3.8-flash-tiered', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-flash-thinking'],
         'claude': ['claude-opus-5-5-high', 'claude-sonnet-5-5-high', 'claude-sonnet-4-6', 'claude-opus-4-6-thinking'],
     };
     const names = preferred[category];
@@ -277,4 +282,137 @@ export function extractGroupQuotaPercentage(
         }
     }
     return null;
+}
+
+export interface ModelDisplayComplianceOptions {
+    allowLiveCloudModels?: boolean;
+    deprecatedSet?: Set<string>;
+    activeFlashMinorFloor?: number;
+    allowGemini31FlashLiteStrict?: boolean;
+}
+
+export function isModelDisplayCompliant(
+    key: string,
+    options: ModelDisplayComplianceOptions = {},
+): boolean {
+    const {
+        allowLiveCloudModels = false,
+        deprecatedSet,
+        activeFlashMinorFloor,
+        allowGemini31FlashLiteStrict = false,
+    } = options;
+    const m = key.toLowerCase().trim();
+    if (
+        !m ||
+        m.includes('-disabled') ||
+        m.endsWith('_disabled') ||
+        m.startsWith('chat_') ||
+        m.startsWith('tab_') ||
+        m.includes('internal') ||
+        m.includes('-exp') ||
+        m.endsWith('-agent') ||
+        m.includes('-preview')
+    ) {
+        return false;
+    }
+
+    if (m === 'gemini-3-flash') {
+        return allowLiveCloudModels;
+    }
+
+    if (m === 'gemini-3.1-flash-lite') {
+        return allowLiveCloudModels || allowGemini31FlashLiteStrict;
+    }
+
+    if (
+        allowLiveCloudModels &&
+        (m === 'gemini-2.5-flash' ||
+            m === 'gemini-2.5-flash-lite' ||
+            m === 'gemini-2.5-flash-thinking' ||
+            m === 'gemini-2.5-pro')
+    ) {
+        return true;
+    }
+
+    if (deprecatedSet && deprecatedSet.has(m) && !m.includes('lite')) {
+        return false;
+    }
+
+    if (
+        m === 'gemini-3.5-flash-lite' ||
+        m === 'gemini-flash-lite' ||
+        m === 'gemini-3.1-flash-image' ||
+        m === 'gemini-3-pro-image'
+    ) {
+        return true;
+    }
+
+    if (
+        m.includes('2.5') ||
+        m.includes('2-5') ||
+        m.includes('gemini-1.') ||
+        m.includes('gemini-2.') ||
+        m === 'gemini-3-pro' ||
+        m.includes('3.5-flash') ||
+        m.includes('3.6-flash') ||
+        m.includes('3.7-flash')
+    ) {
+        return false;
+    }
+
+    if (m.includes('claude')) {
+        if ((m.startsWith('claude-sonnet-') || m.includes('-5-5')) && m.includes('thinking')) {
+            return false;
+        }
+        const tokens = m.split(/[-_.]/);
+        let detectedMajor: number | null = null;
+        let detectedMinor = 0;
+        let i = 0;
+        while (i < tokens.length) {
+            const tok = tokens[i];
+            if (tok.length === 8 && (tok.startsWith('202') || tok.startsWith('201'))) {
+                i++;
+                continue;
+            }
+            const major = parseInt(tok, 10);
+            if (!isNaN(major) && major < 1000) {
+                detectedMajor = major;
+                if (i + 1 < tokens.length) {
+                    const nextTok = tokens[i + 1];
+                    if (!(nextTok.length === 8 && (nextTok.startsWith('202') || nextTok.startsWith('201')))) {
+                        const minor = parseInt(nextTok, 10);
+                        if (!isNaN(minor) && minor < 1000) {
+                            detectedMinor = minor;
+                            i++;
+                        }
+                    }
+                }
+                break;
+            }
+            i++;
+        }
+        if (detectedMajor !== null) {
+            if (m.includes('fable') || m.includes('mythos')) {
+                return detectedMajor >= 5;
+            }
+            return detectedMajor > 4 || (detectedMajor === 4 && detectedMinor >= 6);
+        }
+        return false;
+    }
+
+    if (m.includes('lite') || m.includes('image')) {
+        return true;
+    }
+
+    if (m.startsWith('gemini-3.') && m.includes('flash') && activeFlashMinorFloor !== undefined) {
+        const match = m.match(/gemini-3\.(\d+)/);
+        if (match) {
+            const minor = parseInt(match[1], 10);
+            if (minor < activeFlashMinorFloor) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
